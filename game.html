@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minimalist Ping Pong</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #FFEB3B;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            transition: background-color 0.5s ease;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            align-items: center;
+        }
+        
+        .back-button {
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .high-score {
+            font-size: 18px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.6);
+        }
+        
+        .main-score {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+            color: rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            z-index: 1;
+        }
+        
+        .paddle {
+            position: absolute;
+            width: 100px;
+            height: 40px;
+            background-color: #000;
+            border-radius: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        #bottomPaddle {
+            bottom: 20px;
+        }
+        
+        .ball {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            background-color: #000; /* Black ball */
+            z-index: 2;
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            color: rgba(0, 0, 0, 0.8);
+            font-weight: bold;
+            text-align: center;
+            z-index: 10;
+            display: none;
+        }
+        
+        .restart-button {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 50px;
+            background-color: #000;
+            border-radius: 25px;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10;
+        }
+        
+        @media (max-height: 600px) {
+            .main-score {
+                font-size: 80px;
+            }
+            
+            .game-over {
+                font-size: 30px;
+            }
+            
+            .restart-button {
+                width: 100px;
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="back-button" id="closeButton">✕</div>
+        <div class="high-score" id="highScore">Best: 0</div>
+    </div>
+    
+    <div class="main-score" id="currentScore">0</div>
+    <div class="game-over" id="gameOverText">GAME OVER</div>
+    <div class="restart-button" id="restartButton">RESTART</div>
+    
+    <div class="ball" id="ball"></div> <!-- Removed the mobile icon -->
+    <div class="paddle" id="bottomPaddle"></div>
+    
+    <script>
+        // Game variables
+        let ballX = 0;
+        let ballY = 0;
+        let ballSpeedX = 2.5;
+        let ballSpeedY = 2.5;
+        let initialBallSpeedX = 2.5;
+        let initialBallSpeedY = 2.5;
+        let score = 0;
+        let highScore = 0;
+        let gameRunning = true;
+        let backgroundColors = ['#FFEB3B', '#8F00FF', '#4B0082', '#0000FF', '#E91E63', '#00FF00	', '#FFFF00	', '#ADD8E6	', '#FFCCCB', '#03A9F4'];
+        
+        // DOM elements
+        const ball = document.getElementById('ball');
+        const bottomPaddle = document.getElementById('bottomPaddle');
+        const currentScore = document.getElementById('currentScore');
+        const highScoreElement = document.getElementById('highScore');
+        const closeButton = document.getElementById('closeButton');
+        const gameOverText = document.getElementById('gameOverText');
+        const restartButton = document.getElementById('restartButton');
+        
+        // Adjust ball size for very small screens
+        if (window.innerWidth < 360 || window.innerHeight < 500) {
+            ball.style.width = '20px';
+            ball.style.height = '20px';
+        }
+        
+        // Set initial positions
+        ballX = window.innerWidth / 2;
+        ballY = window.innerHeight / 3;
+        
+        // Check for stored high score
+        if(localStorage.getItem('pingPongHighScore')) {
+            highScore = parseInt(localStorage.getItem('pingPongHighScore'));
+            highScoreElement.textContent = 'Best: ' + highScore;
+        }
+        
+        // Close game when X is clicked
+        closeButton.addEventListener('click', function() {
+            if (confirm("Close the game?")) {
+                window.close(); // This may not work in all browsers due to security
+                // Fallback for browsers that don't allow window.close()
+                document.body.innerHTML = "<div style='text-align:center; margin-top:40vh; font-size:24px;'>Game closed. Refresh to restart.</div>";
+            }
+        });
+        
+        // Restart game button
+        restartButton.addEventListener('click', function() {
+            gameOverText.style.display = 'none';
+            restartButton.style.display = 'none';
+            score = 0;
+            currentScore.textContent = score;
+            ballSpeedX = initialBallSpeedX;
+            ballSpeedY = initialBallSpeedY;
+            gameRunning = true;
+            document.body.style.backgroundColor = backgroundColors[0];
+            resetBall();
+            requestAnimationFrame(update);
+        });
+        
+        // Handle paddle movement with touch
+        let touchX = window.innerWidth / 2;
+        
+        document.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // Prevent scrolling/zooming
+            if (gameRunning) {
+                touchX = e.touches[0].clientX;
+                movePaddle(touchX);
+            }
+        });
+        
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault(); // Prevent scrolling/zooming
+            if (gameRunning) {
+                touchX = e.touches[0].clientX;
+                movePaddle(touchX);
+            }
+        });
+        
+        // Mouse movement for desktop
+        document.addEventListener('mousemove', function(e) {
+            if (gameRunning) {
+                movePaddle(e.clientX);
+            }
+        });
+        
+        function movePaddle(xPosition) {
+            let paddleX = xPosition - bottomPaddle.offsetWidth / 2;
+            
+            // Keep paddle within screen bounds
+            if (paddleX < 0) paddleX = 0;
+            if (paddleX > window.innerWidth - bottomPaddle.offsetWidth) 
+                paddleX = window.innerWidth - bottomPaddle.offsetWidth;
+            
+            bottomPaddle.style.left = paddleX + 'px';
+        }
+        
+        function update() {
+            if (!gameRunning) return;
+            
+            // Update ball position
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+            
+            // Get ball dimensions
+            const ballWidth = ball.offsetWidth;
+            const ballRadius = ballWidth / 2;
+            
+            // Ball collision with sides
+            if (ballX < ballRadius || ballX > window.innerWidth - ballRadius) {
+                ballSpeedX = -ballSpeedX;
+                // Adjust position to prevent sticking to the edge
+                if (ballX < ballRadius) ballX = ballRadius;
+                if (ballX > window.innerWidth - ballRadius) ballX = window.innerWidth - ballRadius;
+            }
+            
+            // Ball collision with top
+            if (ballY < ballRadius) {
+                ballSpeedY = -ballSpeedY;
+                ballY = ballRadius; // Prevent sticking to the top
+            }
+            
+            // Get current paddle position
+            const paddleLeft = parseInt(bottomPaddle.style.left || 0);
+            const paddleWidth = bottomPaddle.offsetWidth;
+            const paddleTop = bottomPaddle.offsetTop;
+            
+            // Ball collision with bottom paddle
+            if (ballY + ballRadius > paddleTop) {
+                if (ballX > paddleLeft && ballX < paddleLeft + paddleWidth) {
+                    ballSpeedY = -ballSpeedY;
+                    // Add angle based on where ball hits paddle
+                    const hitPosition = (ballX - (paddleLeft + paddleWidth/2)) / (paddleWidth/2);
+                    ballSpeedX = initialBallSpeedX * hitPosition * 1.5;
+                    
+                    // Increase score
+                    score++;
+                    currentScore.textContent = score;
+                    
+                    // Change background color every 3 points
+                    if (score % 3 === 0) {
+                        let colorIndex = (score / 3) % backgroundColors.length;
+                        document.body.style.backgroundColor = backgroundColors[colorIndex];
+                    }
+                    
+                    // Increase speed every 5 hits
+                    if (score % 5 === 0) {
+                        ballSpeedX *= 1.1;
+                        ballSpeedY *= 1.1;
+                    }
+                    
+                    // Update high score if needed
+                    if (score > highScore) {
+                        highScore = score;
+                        highScoreElement.textContent = 'Best: ' + highScore;
+                        localStorage.setItem('pingPongHighScore', highScore);
+                    }
+                } else if (ballY > window.innerHeight) {
+                    // Game over if missed
+                    gameOver();
+                }
+            }
+            
+            // Update ball position
+            ball.style.left = (ballX - ballRadius) + 'px';
+            ball.style.top = (ballY - ballRadius) + 'px';
+            
+            // Continue the game loop
+            requestAnimationFrame(update);
+        }
+        
+        function resetBall() {
+            // Reset position but don't reset score
+            ballX = Math.random() * (window.innerWidth - 100) + 50;
+            ballY = window.innerHeight / 3;
+            ballSpeedY = Math.abs(initialBallSpeedY);
+            ballSpeedX = initialBallSpeedX * (Math.random() > 0.5 ? 1 : -1);
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            gameOverText.style.display = 'block';
+            restartButton.style.display = 'flex';
+        }
+        
+        // Initialize game
+        function initGame() {
+            bottomPaddle.style.left = (window.innerWidth / 2 - bottomPaddle.offsetWidth / 2) + 'px';
+            ball.style.left = (ballX - ball.offsetWidth/2) + 'px';
+            ball.style.top = (ballY - ball.offsetWidth/2) + 'px';
+            
+            // Start the game loop
+            requestAnimationFrame(update);
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            ballX = window.innerWidth / 2;
+            ballY = window.innerHeight / 3;
+            initGame();
+        });
+        
+        // Lock screen orientation to portrait for mobile
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('portrait').catch(function() {
+                // Silently fail if orientation locking is not supported
+            });
+        }
+        
+        // Prevent default touch behavior
+        document.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+        
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Initialize the game
+        initGame();
+    </script>
+</body>
+</html>
