@@ -13,6 +13,9 @@
             overflow: hidden;
             touch-action: none;
             transition: background-color 0.5s ease;
+            width: 100%;
+            height: 100vh;
+            position: relative;
         }
         
         .header {
@@ -20,6 +23,12 @@
             justify-content: space-between;
             padding: 10px;
             align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10;
         }
         
         .back-button {
@@ -44,6 +53,8 @@
             color: rgba(0, 0, 0, 0.2);
             font-weight: bold;
             z-index: 1;
+            width: 100%;
+            text-align: center;
         }
         
         .paddle {
@@ -65,10 +76,9 @@
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            top: 50%;
-            left: 50%;
-            background-color: #000; /* Black ball */
+            background-color: #000;
             z-index: 2;
+            transform: translate(-50%, -50%);
         }
         
         .game-over {
@@ -82,6 +92,7 @@
             text-align: center;
             z-index: 10;
             display: none;
+            width: 100%;
         }
         
         .restart-button {
@@ -128,7 +139,7 @@
     <div class="game-over" id="gameOverText">GAME OVER</div>
     <div class="restart-button" id="restartButton">RESTART</div>
     
-    <div class="ball" id="ball"></div> <!-- Removed the mobile icon -->
+    <div class="ball" id="ball"></div>
     <div class="paddle" id="bottomPaddle"></div>
     
     <script>
@@ -142,7 +153,7 @@
         let score = 0;
         let highScore = 0;
         let gameRunning = true;
-        let backgroundColors = ['#FFEB3B', '#8F00FF', '#4B0082', '#0000FF', '#E91E63', '#00FF00	', '#FFFF00	', '#ADD8E6	', '#FFCCCB', '#03A9F4'];
+        let backgroundColors = ['#FFEB3B', '#8F00FF', '#4B0082', '#0000FF', '#E91E63', '#00FF00', '#FFFF00', '#ADD8E6', '#FFCCCB', '#03A9F4'];
         
         // DOM elements
         const ball = document.getElementById('ball');
@@ -158,10 +169,6 @@
             ball.style.width = '20px';
             ball.style.height = '20px';
         }
-        
-        // Set initial positions
-        ballX = window.innerWidth / 2;
-        ballY = window.innerHeight / 3;
         
         // Check for stored high score
         if(localStorage.getItem('pingPongHighScore')) {
@@ -255,14 +262,14 @@
             }
             
             // Get current paddle position
-            const paddleLeft = parseInt(bottomPaddle.style.left || 0);
+            const paddleLeft = bottomPaddle.getBoundingClientRect().left;
             const paddleWidth = bottomPaddle.offsetWidth;
-            const paddleTop = bottomPaddle.offsetTop;
+            const paddleTop = bottomPaddle.getBoundingClientRect().top;
             
             // Ball collision with bottom paddle
-            if (ballY + ballRadius > paddleTop) {
+            if (ballY + ballRadius > paddleTop && ballY < paddleTop + bottomPaddle.offsetHeight) {
                 if (ballX > paddleLeft && ballX < paddleLeft + paddleWidth) {
-                    ballSpeedY = -ballSpeedY;
+                    ballSpeedY = -Math.abs(ballSpeedY); // Ensure it goes up
                     // Add angle based on where ball hits paddle
                     const hitPosition = (ballX - (paddleLeft + paddleWidth/2)) / (paddleWidth/2);
                     ballSpeedX = initialBallSpeedX * hitPosition * 1.5;
@@ -273,7 +280,7 @@
                     
                     // Change background color every 3 points
                     if (score % 3 === 0) {
-                        let colorIndex = (score / 3) % backgroundColors.length;
+                        let colorIndex = Math.floor(score / 3) % backgroundColors.length;
                         document.body.style.backgroundColor = backgroundColors[colorIndex];
                     }
                     
@@ -289,15 +296,18 @@
                         highScoreElement.textContent = 'Best: ' + highScore;
                         localStorage.setItem('pingPongHighScore', highScore);
                     }
-                } else if (ballY > window.innerHeight) {
-                    // Game over if missed
-                    gameOver();
                 }
             }
             
+            // Game over if missed
+            if (ballY - ballRadius > window.innerHeight) {
+                gameOver();
+                return;
+            }
+            
             // Update ball position
-            ball.style.left = (ballX - ballRadius) + 'px';
-            ball.style.top = (ballY - ballRadius) + 'px';
+            ball.style.left = ballX + 'px';
+            ball.style.top = ballY + 'px';
             
             // Continue the game loop
             requestAnimationFrame(update);
@@ -320,18 +330,17 @@
         // Initialize game
         function initGame() {
             bottomPaddle.style.left = (window.innerWidth / 2 - bottomPaddle.offsetWidth / 2) + 'px';
-            ball.style.left = (ballX - ball.offsetWidth/2) + 'px';
-            ball.style.top = (ballY - ball.offsetWidth/2) + 'px';
-            
-            // Start the game loop
-            requestAnimationFrame(update);
+            resetBall();
+            update();
         }
         
         // Handle window resize
         window.addEventListener('resize', function() {
-            ballX = window.innerWidth / 2;
-            ballY = window.innerHeight / 3;
-            initGame();
+            if (gameRunning) {
+                ballX = window.innerWidth / 2;
+                ballY = window.innerHeight / 3;
+                initGame();
+            }
         });
         
         // Lock screen orientation to portrait for mobile
